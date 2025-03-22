@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 spreadsheet_url = os.getenv("SHEET_URL")
+credentials_url = os.getenv("CREDENTIALS_URL")
 
 scopes = [
     'https://www.googleapis.com/auth/spreadsheets',
@@ -12,7 +13,7 @@ scopes = [
 ]
 
 credentials = Credentials.from_service_account_file(
-    "credentials.json",
+    credentials_url,
     scopes=scopes
 )
 
