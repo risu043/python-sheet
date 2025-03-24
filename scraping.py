@@ -37,34 +37,73 @@ def init_driver():
     return webdriver.Chrome(service=service, options=chrome_options)
 
 
+def wait_for_page_load(driver, timeout=10):
+    try:
+        WebDriverWait(driver, timeout).until(
+            lambda d: d.execute_script("return document.readyState") == "complete"
+        )
+        print("✅ ページの読み込み完了")
+    except Exception as e:
+        print(f"❌ ページ読み込みエラー: {e}")
+
+
+def wait_for_login_success(driver, timeout=10):
+    try:
+        print("✅ ログイン状態をチェック中...")
+        WebDriverWait(driver, timeout).until(
+            EC.any_of(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="logout"]')),
+                EC.presence_of_element_located((By.XPATH, '//*[@id="skipMsg"]/button'))
+                EC.presence_of_element_located((By.XPATH, '//*[@id="mymenuSec"]/div/div[2]/div/div[2]/div[1]/div[2]/a[1]'))
+            )
+        )
+        print("✅ ログイン成功を確認しました")
+        return True
+    except Exception as e:
+        print(f"❌ ログイン確認タイムアウト: {e}")
+        return False
+
+
 def load_cookies(driver):
     if os.path.exists(cookie_path):
         print("✅ Cookie 読み込み中...")
         driver.get(base_url)
-        time.sleep(3)
-        
+        wait_for_page_load(driver)
+
         try:
             with open(cookie_path, "rb") as cookie_file:
                 cookies = pickle.load(cookie_file)
                 valid_cookies = 0
-                
+
+                driver.execute_cdp_cmd("Network.enable", {})
                 for cookie in cookies:
                     if "domain" in cookie and "sbisec.co.jp" in cookie["domain"]:
                         try:
-                            driver.add_cookie(cookie)
+                            driver.execute_cdp_cmd("Network.setCookie", cookie)
                             valid_cookies += 1
                         except Exception as e:
                             print(f"Cookie 追加エラー: {e}")
-                
-                print(f"✅ {valid_cookies}個の Cookie を読み込みました")
-                
-            driver.get(login_url)
-            time.sleep(8)
-            
+
+                print(f"✅ {valid_cookies} 個の Cookie を読み込みました")
+
+            driver.refresh()
+            wait_for_page_load(driver)
+
+            if wait_for_login_success(driver):
+                print("✅ Cookie による自動ログイン成功")
+                return True
+            else:
+                print("❌ Cookie ではログインできませんでした")
+                return False
+
         except Exception as e:
-            print(f"Cookie 読み込みエラー: {e}")
+            print(f"❌ Cookie 読み込みエラー: {e}")
             os.remove(cookie_path)
             print("❌ 破損した Cookie ファイルを削除しました")
+            return False
+    else:
+        print("⚠️ Cookie ファイルが見つかりません。")
+        return False
 
 
 def save_cookies(driver):
@@ -90,7 +129,7 @@ def login_with_credentials(driver):
         print("⚠️ パスコードを手動で入力してください...")
         time.sleep(50)
 
-        if check_login_success(driver):
+        if wait_for_login_success(driver, timeout=30):
             save_cookies(driver)
         else:
             print("❌ ログイン失敗。Cookie は保存されません。")
@@ -99,33 +138,43 @@ def login_with_credentials(driver):
         print(f"ログインエラー: {e}")
 
 
-def check_login_success(driver):
+def click_button(driver, xpath, timeout=10):
     try:
-        alt_logout = driver.find_elements(By.XPATH, "//img[@alt='ログアウト']")
-        if alt_logout:
-            print(f"✅ alt='ログアウト'の画像が {len(alt_logout)} 個見つかりました")
-            return True
+        button = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, xpath))
+        )
+        button.click()
+        wait_for_page_load(driver)
     except Exception as e:
-        print(f"ログイン確認エラー: {e}")
-        return False
+        print(f"❌ ボタンクリックエラー: {e}")
 
 
 def main():
     driver = init_driver()
     driver.get(login_url)
-    time.sleep(3)
-    load_cookies(driver)
-    driver.get(login_url)
-    time.sleep(10)
+    wait_for_page_load(driver)
 
-    if check_login_success(driver):
+    # ✅ Cookie による自動ログイン
+    if load_cookies(driver):
         print("✅ Cookie で自動ログイン成功！")
     else:
         print("📝 通常ログインを試行します...")
         login_with_credentials(driver)
 
-    # 処理終了
-    time.sleep(10)
+    # ✅ ログイン成功後の処理
+    if wait_for_login_success(driver):
+        print("✅ ログイン状態を維持して処理を続行します")
+
+        # 「あとで見る」ボタンをクリック
+        click_button(driver, '//*[@id="skipMsg"]/button')
+
+        # 「My資産」ボタンをクリック
+        click_button(driver, '//*[@id="mymenuSec"]/div/div[2]/div/div[2]/div[1]/div[2]/a[1]')
+    
+        time.sleep(5)
+    else:
+        print("❌ ログインできませんでした。")
+
     driver.quit()
 
 
