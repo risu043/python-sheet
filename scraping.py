@@ -47,13 +47,13 @@ def wait_for_page_load(driver, timeout=10):
         print(f"❌ ページ読み込みエラー: {e}")
 
 
-def wait_for_login_success(driver, timeout=10):
+def wait_for_login_success(driver, timeout=30):
     try:
         print("✅ ログイン状態をチェック中...")
         WebDriverWait(driver, timeout).until(
             EC.any_of(
                 EC.presence_of_element_located((By.XPATH, '//*[@id="logout"]')),
-                EC.presence_of_element_located((By.XPATH, '//*[@id="skipMsg"]/button'))
+                EC.presence_of_element_located((By.XPATH, '//*[@id="skipMsg"]/button')),
                 EC.presence_of_element_located((By.XPATH, '//*[@id="mymenuSec"]/div/div[2]/div/div[2]/div[1]/div[2]/a[1]'))
             )
         )
@@ -91,51 +91,13 @@ def load_cookies(driver):
 
             if wait_for_login_success(driver):
                 print("✅ Cookie による自動ログイン成功")
-                return True
             else:
                 print("❌ Cookie ではログインできませんでした")
-                return False
 
         except Exception as e:
             print(f"❌ Cookie 読み込みエラー: {e}")
-            os.remove(cookie_path)
-            print("❌ 破損した Cookie ファイルを削除しました")
-            return False
     else:
         print("⚠️ Cookie ファイルが見つかりません。")
-        return False
-
-
-def save_cookies(driver):
-    with open(cookie_path, "wb") as cookie_file:
-        pickle.dump(driver.get_cookies(), cookie_file)
-    print("✅ Cookie を保存しました")
-
-
-def login_with_credentials(driver):
-    try:
-        user_field = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.NAME, "user_id"))
-        )
-        user_field.send_keys(USER)
-
-        password_field = driver.find_element(By.NAME, "user_password")
-        password_field.send_keys(PASSWORD)
-
-        login_button = driver.find_element(By.NAME, "ACT_login")
-        login_button.click()
-
-        # メール認証待機
-        print("⚠️ パスコードを手動で入力してください...")
-        time.sleep(50)
-
-        if wait_for_login_success(driver, timeout=30):
-            save_cookies(driver)
-        else:
-            print("❌ ログイン失敗。Cookie は保存されません。")
-
-    except Exception as e:
-        print(f"ログインエラー: {e}")
 
 
 def click_button(driver, xpath, timeout=10):
@@ -149,32 +111,66 @@ def click_button(driver, xpath, timeout=10):
         print(f"❌ ボタンクリックエラー: {e}")
 
 
+def check_element(driver, xpath, timeout=80):
+    try:
+        element = WebDriverWait(driver, timeout).until(
+            EC.presence_of_element_located((By.XPATH, xpath))
+        )
+        print(f"✅ 要素を発見しました: {xpath}")
+        return element
+    except Exception as e:
+        print(f"❌ 要素チェックエラー ({xpath}): {e}")
+        return None
+
+
+def switch_to_new_tab(driver):
+    try:
+        # 開いているタブのハンドルを取得
+        window_handles = driver.window_handles
+        
+        if len(window_handles) > 1:
+            driver.switch_to.window(window_handles[-1])  # 最新のタブに切り替え
+            print("✅ 新しいタブに切り替えました")
+            wait_for_page_load(driver)
+        else:
+            print("⚠️ 新しいタブが開かれていません")
+    except Exception as e:
+        print(f"❌ タブ切り替えエラー: {e}")
+
+
 def main():
     driver = init_driver()
     driver.get(login_url)
     wait_for_page_load(driver)
 
-    # ✅ Cookie による自動ログイン
-    if load_cookies(driver):
-        print("✅ Cookie で自動ログイン成功！")
+    load_cookies(driver)
+
+    # 「あとで見る」ボタンをクリック
+    click_button(driver, '//*[@id="skipMsg"]/button')
+
+    # 「My資産」ボタンをクリック
+    click_button(driver, '//*[@id="mymenuSec"]/div/div[2]/div/div[2]/div[1]/div[2]/a[1]')
+
+    switch_to_new_tab(driver)
+
+    # 各「評価額」を取得
+    investment_trust = check_element(driver, '//*[@id="balance"]/ul/li[2]/div[2]/p')
+    deposit = check_element(driver, '//*[@id="balance"]/ul/li[3]/div[2]/p')
+
+    if investment_trust:
+        print(f"投資信託: {investment_trust.text}")
     else:
-        print("📝 通常ログインを試行します...")
-        login_with_credentials(driver)
+        print("❌ 投資信託の情報を取得できませんでした")
 
-    # ✅ ログイン成功後の処理
-    if wait_for_login_success(driver):
-        print("✅ ログイン状態を維持して処理を続行します")
+    if deposit:
+        print(f"預り金: {deposit.text}")
+    else:
+        print("❌ 預り金の情報を取得できませんでした")
 
-        # 「あとで見る」ボタンをクリック
-        click_button(driver, '//*[@id="skipMsg"]/button')
 
-        # 「My資産」ボタンをクリック
-        click_button(driver, '//*[@id="mymenuSec"]/div/div[2]/div/div[2]/div[1]/div[2]/a[1]')
     
-        time.sleep(5)
-    else:
-        print("❌ ログインできませんでした。")
-
+    time.sleep(5)
+    
     driver.quit()
 
 
