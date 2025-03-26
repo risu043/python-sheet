@@ -37,6 +37,23 @@ def init_driver():
     return webdriver.Chrome(service=service, options=chrome_options)
 
 
+def wait_for_login_success(driver, timeout=30):
+    try:
+        print("✅ ログイン状態をチェック中...")
+        WebDriverWait(driver, timeout).until(
+            EC.any_of(
+                EC.presence_of_element_located((By.XPATH, '//*[@id="logout"]')),
+                EC.presence_of_element_located((By.XPATH, '//*[@id="skipMsg"]/button')),
+                EC.presence_of_element_located((By.XPATH, '//*[@id="mymenuSec"]/div/div[2]/div/div[2]/div[1]/div[2]/a[1]'))
+            )
+        )
+        print("✅ ログイン成功を確認しました")
+        return True
+    except Exception as e:
+        print(f"❌ ログイン確認タイムアウト: {e}")
+        return False
+        
+
 def save_cookies(driver):
     with open(cookie_path, "wb") as cookie_file:
         pickle.dump(driver.get_cookies(), cookie_file)

@@ -20,5 +20,5 @@ credentials = Credentials.from_service_account_file(
 gc = gspread.authorize(credentials)
 
 spreadsheet = gc.open_by_url(spreadsheet_url)
-print(spreadsheet.sheet1.get_all_values())
 
+__all__ = ['spreadsheet']

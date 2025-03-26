@@ -1,6 +1,7 @@
 import os
 import time
 import pickle
+from datetime import datetime
 from dotenv import load_dotenv
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -8,6 +9,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
+from spreadsheet import spreadsheet
 
 # .env 読み込み
 load_dotenv()
@@ -25,6 +27,9 @@ cookie_path = os.path.join(os.getcwd(), "cookies.pkl")
 # URL
 base_url = "https://site3.sbisec.co.jp"
 login_url = f"{base_url}/ETGate"
+
+# シートを選択
+worksheet = spreadsheet.sheet1
 
 
 def init_driver():
@@ -138,6 +143,22 @@ def switch_to_new_tab(driver):
         print(f"❌ タブ切り替えエラー: {e}")
 
 
+def append_to_spreadsheet(investment_trust, deposit):
+    # ✅ タイムスタンプの取得
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # ✅ データの作成
+    data_row = [
+        now,
+        investment_trust if investment_trust else "取得失敗",
+        deposit if deposit else "取得失敗",
+    ]
+
+    # ✅ スプレッドシートに追記
+    worksheet.append_rows([data_row], value_input_option="RAW")
+    print("✅ スプレッドシートにデータを追記しました！")
+
+
 def main():
     driver = init_driver()
     driver.get(login_url)
@@ -167,7 +188,10 @@ def main():
     else:
         print("❌ 預り金の情報を取得できませんでした")
 
-
+    append_to_spreadsheet(
+        investment_trust.text if investment_trust else None,
+        deposit.text if deposit else None,
+    )
     
     time.sleep(5)
     
